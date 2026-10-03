@@ -729,9 +729,6 @@
             },
             {
               "text": "Le calendrier ou les dates approximatives pour l'essai d’un RAT"
-            },
-            {
-              "text": "Félicitations, vous avez atteint la fin de la leçon!"
             }
           ],
           "images": [
@@ -739,17 +736,11 @@
           ]
         }
       ],
-      "tabs": [
-        {
-          "title": "Félicitations, vous avez atteint la fin de la leçon!",
-          "images": [],
-          "content": []
-        }
-      ],
+      "tabs": [],
       "images": []
     },
     {
-      "title": "",
+      "title": "LEÇON 2 | RETOUR AU TRAVAIL : L’ÉVALUATION",
       "sections": [
         {
           "title": "Étape 1 d’iCanWork: Comprendre les facteurs qui ont un impact sur le travail",
@@ -1266,7 +1257,7 @@
       "images": []
     },
     {
-      "title": "",
+      "title": "LEÇON 3 | RETOUR AU TRAVAIL : RELEVER LES DÉFIS",
       "sections": [
         {
           "title": "Étape 4 d’iCanWork: Identifier, traiter et orienter vers du soutien",
@@ -1977,7 +1968,7 @@
       "images": []
     },
     {
-      "title": "",
+      "title": "LEÇON 4 | RETOUR AU TRAVAIL : LA TRANSITION VERS LE LIEU DE TRAVAIL",
       "sections": [
         {
           "title": "Étape 6 d’iCanWork : Identifier et favoriser le soutien du lieu de travail",

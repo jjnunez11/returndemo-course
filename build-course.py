@@ -404,13 +404,13 @@ def _extract_lesson(raw, start, end, lang):
         t = p["text"]
         style = p["style"]
 
-        # Skip congrats
-        if "Congratulations" in t:
+        # Skip congrats (EN and FR)
+        if "Congratulations" in t or "Félicitations" in t:
             continue
 
         # Lesson title (e.g., "LESSON 1 | INTRODUCTION..." or "LEÇON 1 | INTRODUCTION...")
-        t_upper = t.upper().replace("Ç", "C")  # normalize Ç→C so LEÇON matches LESSON
-        if "LESSON" in t_upper and "|" in t and not lesson_title_found:
+        t_norm = t.upper().replace("Ç", "C").replace("É", "E")
+        if ("LESSON" in t_norm or "LECON" in t_norm) and "|" in t and not lesson_title_found:
             lesson["title"] = t
             lesson_title_found = True
             continue
