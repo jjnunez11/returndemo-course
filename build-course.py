@@ -408,8 +408,9 @@ def _extract_lesson(raw, start, end, lang):
         if "Congratulations" in t:
             continue
 
-        # Lesson title (e.g., "LESSON 1 | INTRODUCTION...")
-        if "LESSON" in t.upper() and "|" in t and not lesson_title_found:
+        # Lesson title (e.g., "LESSON 1 | INTRODUCTION..." or "LEÇON 1 | INTRODUCTION...")
+        t_upper = t.upper().replace("Ç", "C")  # normalize Ç→C so LEÇON matches LESSON
+        if "LESSON" in t_upper and "|" in t and not lesson_title_found:
             lesson["title"] = t
             lesson_title_found = True
             continue

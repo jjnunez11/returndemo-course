@@ -311,7 +311,9 @@
     }
 
     let html = `<div class="section">`;
-    html += `<h2 class="section-title">${lesson.title}</h2>`;
+    // Fallback for FR lessons whose title is empty (LEÇON ≠ LESSON in build script)
+    const title = lesson.title || (lesson.sections[0] && lesson.sections[0].title) || `Lesson ${id}`;
+    html += `<h2 class="section-title">${title}</h2>`;
 
     // Render each section
     for (const section of lesson.sections) {
