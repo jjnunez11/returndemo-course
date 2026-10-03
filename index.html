@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Return to Work for Cancer Survivors</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <meta name="robots" content="noindex, nofollow">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-inner">
+            <div class="logo">
+                <h1 id="site-title">Return to Work for Cancer Survivors</h1>
+            </div>
+            <div class="header-controls">
+                <button class="lang-toggle" id="lang-toggle" aria-label="Switch language">
+                    <span class="lang-current" id="lang-label">EN</span>
+                    <span class="lang-other">FR</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <nav class="sidebar-nav" id="sidebar-nav">
+                <div class="sidebar-section">
+                    <h3 class="sidebar-heading" data-i18n="navigation">Navigation</h3>
+                    <ul id="nav-list"></ul>
+                </div>
+            </nav>
+            <div class="sidebar-progress">
+                <div class="progress-label" data-i18n="courseProgress">Course Progress</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-text" id="progress-text">0%</div>
+            </div>
+        </aside>
+
+        <main class="main-content" id="main-content">
+            <div class="content-wrapper" id="content-wrapper">
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Loading course...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p data-i18n="footerText">This course is for educational purposes only. It is not a substitute for professional medical advice.</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
