@@ -1151,3 +1151,7 @@ a:hover {
 .collapsible-content.acks-content .collapse_container { display: none; }
 .collapsible-content.acks-content .collapse_container.show { display: block; }
 .acks-content img { display: inline-block; }
+
+.local-video { max-width: 608px; margin: 12px 0; }
+.local-video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+.video-note { font-size: .82rem; color: var(--text-secondary); margin: 6px 0 0; }

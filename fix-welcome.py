@@ -98,3 +98,12 @@ for l in ("en", "fr"):
     if fixed != raw:
         open(p, "w").write(fixed)
         print(l, "typo fixes applied to remaining text")
+
+
+# ── No Mainpro+ / accreditation on the site: this is no longer an accredited course ──
+for l in ("en", "fr"):
+    p = f"data/course-{l}.json"
+    d = json.load(open(p))
+    d["meta"].pop("credits", None)
+    d.pop("courseOverview", None)  # Moodle/Mainpro+ course structure + accreditation text; unused
+    json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)

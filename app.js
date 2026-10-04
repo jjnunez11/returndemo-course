@@ -276,7 +276,6 @@
       <div class="hero">
         <h2>${meta.title}</h2>
         <div class="meta-info">
-          <div class="meta-item"><span class="meta-label">${meta.credits}</span></div>
           <div class="meta-item"><span class="meta-label">${meta.duration}</span></div>
           <div class="meta-item"><span class="meta-label">${meta.targetAudience}</span></div>
         </div>

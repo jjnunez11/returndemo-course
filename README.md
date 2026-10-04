@@ -41,7 +41,7 @@ data/
   images/         # 166 extracted images (93 EN + 73 FR)
 assets/
   pdfs/           # Course PDFs (infographics, lesson resources, plan forms)
-  videos/         # Frederic's story videos (EN + FR)
+  videos/         # Frederic's story, 720p re-encodes (EN + FR) + posters; 1080p originals live in sources/
 build-course.py   # Word doc -> JSON + image extraction
 robots.txt        # Disallow: / (unlisted)
 ```
@@ -54,5 +54,5 @@ Cloudflare Pages, custom DNS `returndemo.johnjosenunez.com`, no Access gate.
 
 - `robots.txt` has `Disallow: /` -- site is openly accessible but not indexed
 - Language toggle switches EN/FR via JSON swap, no page reload
-- Quizzes are client-side self-assessment only (no Mainpro+ tracking)
+- Quizzes are client-side self-assessment only (no accreditation or credit tracking)
 - Post-course questionnaire shows "Thank you" on submit, no data collected

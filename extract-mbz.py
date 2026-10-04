@@ -194,6 +194,26 @@ def remove_interactive_fallback(html_text):
     return html_text
 
 
+FREDERIC_ENTRIES = {"0_lwif665k": "EN", "0_mb8ufiue": "FR"}
+CAPTION_NOTE = {
+    "en": 'Captions are available in the <a href="{url}" target="_blank" rel="noopener">UBC video player</a>.',
+    "fr": 'Les sous-titres sont disponibles dans le <a href="{url}" target="_blank" rel="noopener">lecteur vidéo de l\'UBC</a>.',
+}
+
+
+def swap_frederic_video(html_text, lang):
+    """Self-host Frederic's story (720p) instead of the UBC Kaltura embed; keep the Kaltura player linked for captions."""
+    def sub(m):
+        code = FREDERIC_ENTRIES[m.group(2)]
+        note = CAPTION_NOTE[lang].format(url=m.group(1))
+        return (f'<div class="local-video"><video controls preload="metadata" playsinline '
+                f'poster="assets/videos/Frederic_{code}.jpg"><source src="assets/videos/Frederic_{code}.mp4" type="video/mp4"></video>'
+                f'<p class="video-note">{note}</p></div>')
+    return re.sub(
+        r'<div style="position: relative; padding-bottom: 71.25%;">\s*<iframe id="kaltura_player" src="([^"]*entry_id=(0_lwif665k|0_mb8ufiue)[^"]*)"[^>]*></iframe>\s*</div>',
+        sub, html_text)
+
+
 LESSON_SECTION = {"10373": "lesson-1", "10374": "lesson-2", "10375": "lesson-3", "10376": "lesson-4"}
 MANIFEST = {}
 
@@ -425,7 +445,7 @@ def extract_lessons(manifest, hvp_by_id):
                 c = clean_html(extract_lang(raw, lang))
                 c = re.sub(r'<div data-hvp="(\d+)"></div>', lambda m: build_hotspot_html(hvp_by_id[m.group(1)]), c)
                 out[lang]["pages"].append({"id": pid, "title": title_split.get(lang, "").strip(),
-                                           "content": fix_file_links(process_image_refs(c, img_map), lang)})
+                                           "content": swap_frederic_video(fix_file_links(process_image_refs(c, img_map), lang), lang)})
 
         if out["en"]["pages"] or out["en"]["questions"]:
             lessons[lesson_id] = {
