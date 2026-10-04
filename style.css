@@ -1,14 +1,14 @@
 /* ── Design Tokens (cancerandwork.ca inspired) ────────────────────────── */
 :root {
-    --accent: #9461a9;
-    --accent-light: #a878b8;
-    --accent-dark: #7a4d8e;
-    --accent-surface: #f3e8f9;
-    --accent-surface-hover: #e8d5f0;
-    --bg: #faf8fd;
+    --accent: #8563a4;
+    --accent-light: #a68bc0;
+    --accent-dark: #66468a;
+    --accent-surface: #f3eff6;
+    --accent-surface-hover: #e6dcef;
+    --bg: #f3eff6;
     --bg-white: #ffffff;
-    --text: #2d2d3a;
-    --text-secondary: #5a5a6e;
+    --text: #000000;
+    --text-secondary: #444444;
     --text-muted: #8a8a9a;
     --border: #e8e4ed;
     --border-light: #f0ecf4;
@@ -16,7 +16,7 @@
     --success-bg: #e8f5ec;
     --error: #c0392b;
     --error-bg: #fde8e6;
-    --warning: #f39c12;
+    --quiz-link: #11778e;
     --shadow-sm: 0 1px 3px rgba(148, 97, 169, 0.08);
     --shadow-md: 0 4px 12px rgba(148, 97, 169, 0.12);
     --shadow-lg: 0 8px 24px rgba(148, 97, 169, 0.16);
@@ -192,7 +192,7 @@ a:hover {
 }
 
 #nav-list li.quiz-item a {
-    color: var(--warning);
+    color: var(--quiz-link);
     font-style: italic;
 }
 
@@ -1155,3 +1155,44 @@ a:hover {
 .local-video { max-width: 608px; margin: 12px 0; }
 .local-video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
 .video-note { font-size: .82rem; color: var(--text-secondary); margin: 6px 0 0; }
+
+/* ══ Typography matched to cancerandwork.ca ═════════════════════════════
+   Parent site: Inter 18px / 1.6 black body, Poppins 700-800 headings,
+   H1/H2 purple (#8563a4), H3 black, links purple, lavender (#f3eff6) panels. */
+body { font-size: 18px; line-height: 1.6; font-weight: 400; color: var(--text); }
+.content-wrapper { max-width: 880px; }
+p, li { line-height: 1.6; }
+strong, b { font-weight: 700; }
+a { font-weight: 500; }
+
+h1, h2, h3, h4, h5, h6, .section-title, .section-subtitle, .hero h2 { font-family: var(--font-heading); }
+h2.section-title { font-size: clamp(1.6rem, 3vw, 2.25rem); font-weight: 800; line-height: 1.2; color: var(--accent); }
+h3.section-title, .mbz-page-title { font-size: clamp(1.4rem, 2.4vw, 1.9rem); font-weight: 700; line-height: 1.25; color: var(--accent); }
+.section-subtitle { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+.hero h2 { font-weight: 800; }
+.mbz-page-content h4, .mbz-page-content h5, .mbz-page-content h6,
+.acks-content h4, .questionnaire-item > label { font-family: var(--font-heading); font-weight: 700; color: var(--text); line-height: 1.3; }
+.mbz-page-content h4 { font-size: 1.3rem; }
+.mbz-page-content h5 { font-size: 1.12rem; }
+.mbz-page-content h6 { font-size: 1rem; }
+.acks-content h5 { color: var(--accent); font-size: 1.15rem; }
+.mbz-page-content { color: var(--text); }
+.mbz-page-content .references, .mbz-page-content .references li { font-size: .88rem; color: var(--text-secondary); }
+.question-text { font-weight: 500; }
+.question-text > strong { font-family: var(--font-heading); }
+
+/* sidebar / header chrome stays compact, in Poppins like the parent's menu */
+#nav-list a { font-family: var(--font-heading); font-size: .92rem; font-weight: 500; line-height: 1.35; }
+#nav-list li.active a { font-weight: 600; }
+#nav-list li.quiz-item a { font-weight: 500; }
+.progress-label, .sidebar-heading { font-family: var(--font-heading); }
+.site-footer p, .video-note, .likert, .hotspot-popup, .inline_definition2 > span { font-size: .9rem; }
+
+/* number circles: keep the iCanWork colours but make the digits readable */
+.numbered-big-circle { color: #fff; font-family: var(--font-heading); font-weight: 700; }
+.red-circle { background: #c9302c; }
+.orange-circle { background: #f0932b; color: #1a1a1a; }
+.yellow-circle2 { background: #f2c200; color: #1a1a1a; }
+.question-text p { margin: 0 0 .5em !important; }
+.question-text p:empty, .question-text p:has(> strong:empty):not(:has(*:not(strong))):empty { display: none; }
+.question-text > strong + p { margin-top: 0 !important; }
