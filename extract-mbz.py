@@ -20,6 +20,7 @@ Produces:
 
 import sys
 import os
+import html as html_mod
 import re
 import json
 import glob
@@ -156,13 +157,56 @@ def extract_lang(text, lang):
 
 # ── Clean HTML for embedding ──────────────────────────────────────────
 
+LESSON_SECTION = {"10373": "lesson-1", "10374": "lesson-2", "10375": "lesson-3", "10376": "lesson-4"}
+MANIFEST = {}
+
+
+def fix_file_links(html_text, lang):
+    """Resolve @@PLUGINFILE@@ links to PDFs: lesson resource packs map to our assets, others are copied out of the backup."""
+    from urllib.parse import unquote
+
+    def sub(m):
+        name = unquote(m.group(1))
+        mm = re.match(r"resources-lesson-(\d)", name)
+        if mm:
+            return f"assets/pdfs/RTW-lesson-{mm.group(1)}-resources_{lang.upper()}.pdf"
+        for area in MANIFEST.values():
+            ch = area.get(name)
+            src = FILES_DIR / ch[:2] / ch if ch else None
+            if src and src.exists():
+                dest = Path("assets/pdfs") / re.sub(r"[^\w.-]+", "_", name)
+                if not dest.exists():
+                    shutil.copy2(str(src), str(dest))
+                return str(dest)
+        return m.group(0)
+
+    return re.sub(r"""@@PLUGINFILE@@/([^"'\s<>]+?\.pdf)""", sub, html_text)
+
+
 def clean_html(raw_html):
     """Clean up Moodle HTML for embedding in our static site."""
     if not raw_html:
         return ""
 
+    # Source typo in one FR answer: a mangled <br ...> tag swallowed a whole line of the feedback
+    raw_html = re.sub(
+        r'&lt;br pour="".*?/&gt;oui',
+        "&lt;br /&gt;Pour donner à son employeur le temps de mettre en place des mesures d’adaptation au besoin\u00a0=\u00a0&lt;strong&gt;oui&lt;/strong&gt;",
+        raw_html, flags=re.DOTALL)
+
     # Decode HTML entities that were double-encoded in Moodle XML
     raw_html = raw_html.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&quot;", '"')
+
+    # H5P embeds -> placeholder, filled with hotspot markup by extract_lessons
+    raw_html = re.sub(r'<iframe[^>]*HVPEMBEDBYID\*(\d+)@\$[^>]*></iframe>',
+                      lambda m: f'<div data-hvp="{m.group(1)}"></div>', raw_html)
+
+    # jQuery inline toggles -> data attribute handled by app.js
+    raw_html = re.sub(r'\sonclick="\$\(\'(#[^\']+)\'\)\.toggle\(\'slow\'\);?"', r' data-toggle-target="\1"', raw_html)
+    # Moodle lesson-page links -> in-site navigation
+    raw_html = re.sub(
+        r'href="\$@LESSONVIEWPAGE\*(\d+)\*(\d+)@\$[^"]*"',
+        lambda m: f'href="#" data-goto="{LESSON_SECTION.get(m.group(1), "lesson-1")}" data-page="{m.group(2)}"', raw_html)
 
     # Remove Moodle-specific scripts
     raw_html = re.sub(r'<script\b[^>]*>.*?</script>', '', raw_html, flags=re.DOTALL)
@@ -257,76 +301,107 @@ def process_image_refs(html_content, img_map):
 
 # ── Extract lesson pages ──────────────────────────────────────────────
 
-def extract_lessons(manifest):
-    """Parse all lesson XML files and extract bilingual page content."""
+def _tag(block, name):
+    m = re.search(rf'<{name}>(.*?)</{name}>', block, re.DOTALL)
+    return m.group(1) if m else ""
+
+
+def _plain(html_text):
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html_mod.unescape(html_text or ""))).strip()
+
+
+def build_lesson_question(page_block, lang, img_map):
+    """Turn a Moodle lesson question page (multichoice=3, matching=5) into our question schema."""
+    qtype = _tag(page_block, "qtype")
+    contents = clean_html(extract_lang(_tag(page_block, "contents"), lang))
+    contents = process_image_refs(contents, img_map)
+    # everything after the case-study box is the actual question prompt
+    prompt = contents.rsplit("</div>", 1)[-1].strip()
+    answers = []
+    for a in re.findall(r'<answer id="\d+">(.*?)</answer>', page_block, re.DOTALL):
+        answers.append({
+            "score": float(_tag(a, "score") or 0),
+            "text": clean_html(extract_lang(_tag(a, "answer_text"), lang)),
+            "response": clean_html(extract_lang(_tag(a, "response"), lang)) if "NULL" not in _tag(a, "response") else "",
+            "raw_response": html_mod.unescape(_tag(a, "response")),
+        })
+    q = {"prompt": prompt}
+    if qtype == "3":
+        q["type"] = "single"
+        q["options"] = [a["text"] for a in answers]
+        q["correct"] = [i for i, a in enumerate(answers) if a["score"] > 0]
+        q["feedback"] = [a["response"] for a in answers]
+    else:  # matching: [correct feedback, incorrect feedback, item, item, ...]
+        q["type"] = "matching"
+        q["feedbackCorrect"] = answers[0]["text"]
+        q["feedbackIncorrect"] = answers[1]["text"]
+        items = []
+        for a in answers[2:]:
+            parts = [p.strip() for p in a["raw_response"].split(" / ")]
+            choice = parts[0] if lang == "en" or len(parts) < 2 else parts[1]
+            items.append({"label": a["text"], "answer": choice})
+        q["choices"] = list(dict.fromkeys(i["answer"] for i in items))
+        q["items"] = items
+    return q
+
+
+def extract_lessons(manifest, hvp_by_id):
+    """Parse all lesson XML files: content pages (in Moodle's page order) and question pages."""
     img_map = build_image_map(manifest)
-    lessons = {}  # lesson_id -> {en: {title, pages}, fr: {title, pages}}
+    lessons = {}
 
     for lesson_file in sorted(glob.glob(str(MBZ_DIR / "activities/lesson_*/lesson.xml"))):
-        lp = Path(lesson_file)
-        lesson_id = lp.parent.name  # e.g. "lesson_10372"
+        lesson_id = Path(lesson_file).parent.name
+        content = open(lesson_file).read()
 
-        with open(lesson_file) as f:
-            content = f.read()
+        blocks = {pid: blk for pid, blk in re.findall(r'<page\s+id="(\d+)">(.*?)</page>', content, re.DOTALL)}
+        # Moodle orders pages as a linked list (prevpageid/nextpageid), not by XML order
+        order, cur = [], next((p for p, b in blocks.items() if _tag(b, "prevpageid") == "0"), None)
+        while cur and cur in blocks and cur not in order:
+            order.append(cur)
+            cur = _tag(blocks[cur], "nextpageid")
+        order += [p for p in blocks if p not in order]
 
-        # Extract all <page> blocks
-        page_blocks = re.findall(r'<page\s+id="(\d+)">(.*?)</page>', content, re.DOTALL)
+        out = {"en": {"pages": [], "questions": []}, "fr": {"pages": [], "questions": []}}
+        for pid in order:
+            blk = blocks[pid]
+            qtype = _tag(blk, "qtype")
+            title_split = split_mlang(_tag(blk, "title"))
+            en_title = title_split.get("en", "").strip()
+            if qtype in ("3", "5"):
+                for lang in ("en", "fr"):
+                    out[lang]["questions"].append(build_lesson_question(blk, lang, img_map))
+                continue
+            # Moodle navigation scaffolding / learning-check intro (shown in the Learning Check section)
+            if en_title.startswith(("End of Lesson", "Learning Check")):
+                continue
+            raw = _tag(blk, "contents")
+            for lang in ("en", "fr"):
+                c = clean_html(extract_lang(raw, lang))
+                c = re.sub(r'<div data-hvp="(\d+)"></div>', lambda m: build_hotspot_html(hvp_by_id[m.group(1)]), c)
+                out[lang]["pages"].append({"id": pid, "title": title_split.get(lang, "").strip(),
+                                           "content": fix_file_links(process_image_refs(c, img_map), lang)})
 
-        lesson_pages = {"en": [], "fr": []}
-
-        for page_id, page_content in page_blocks:
-            # Extract title
-            title_m = re.search(r'<title>(.*?)</title>', page_content, re.DOTALL)
-            title_raw = title_m.group(1) if title_m else ""
-            title_split = split_mlang(title_raw)
-
-            # Extract contents
-            contents_m = re.search(r'<contents>(.*?)</contents>', page_content, re.DOTALL)
-            raw_content = contents_m.group(1) if contents_m else ""
-
-            # Process EN content
-            en_content = extract_lang(raw_content, "en")
-            en_content = clean_html(en_content)
-            en_content = process_image_refs(en_content, img_map)
-
-            # Process FR content
-            fr_content = extract_lang(raw_content, "fr")
-            fr_content = clean_html(fr_content)
-            fr_content = process_image_refs(fr_content, img_map)
-
-            # Extract answer buttons (for navigation labels)
-            answers = re.findall(r'<answer[^>]*>(.*?)</answer>', page_content, re.DOTALL)
-            nav_text = ""
-            for a in answers:
-                at_m = re.search(r'<answer_text>(.*?)</answer_text>', a, re.DOTALL)
-                if at_m:
-                    nav_text = extract_lang(at_m.group(1), "en").strip()
-
-            lesson_pages["en"].append({
-                "title": title_split.get("en", "").strip(),
-                "content": en_content,
-                "nav": nav_text,
-            })
-            lesson_pages["fr"].append({
-                "title": title_split.get("fr", "").strip(),
-                "content": fr_content,
-                "nav": nav_text,
-            })
-
-        # Get lesson title from first page
-        if lesson_pages["en"]:
+        if out["en"]["pages"] or out["en"]["questions"]:
             lessons[lesson_id] = {
-                "en": {
-                    "title": lesson_pages["en"][0].get("title", ""),
-                    "pages": lesson_pages["en"],
-                },
-                "fr": {
-                    "title": lesson_pages["fr"][0].get("title", ""),
-                    "pages": lesson_pages["fr"],
-                }
+                lang: {"title": out[lang]["pages"][0]["title"] if out[lang]["pages"] else "",
+                       "pages": out[lang]["pages"], "questions": out[lang]["questions"]}
+                for lang in ("en", "fr")
             }
-
     return lessons
+
+
+def build_quiz_question(q, lang):
+    prompt = clean_html(q["text"].get(lang, ""))
+    options = [clean_html(a["text"].get(lang, "")) for a in q["answers"]]
+    correct = [i for i, a in enumerate(q["answers"]) if a["correct"]]
+    return {
+        "type": "multi" if len(correct) > 1 else "single",
+        "prompt": prompt,
+        "options": options,
+        "correct": correct,
+        "feedback": [clean_html(a["feedback"].get(lang, "")) for a in q["answers"]],
+    }
 
 
 # ── Extract quiz questions ────────────────────────────────────────────
@@ -409,8 +484,10 @@ def extract_hvp_content(manifest):
         main_image_path = main_image_data.get("path", "") if isinstance(main_image_data, dict) else ""
 
         tab = {
+            "id": Path(hvp_file).parent.name.split("_")[1],
             "title": name,
-            "image": main_image_path,
+            "image": main_image_path.split("#")[0],
+            "image_size": (main_image_data.get("width"), main_image_data.get("height")),
             "hotspots": [],
         }
 
@@ -428,7 +505,7 @@ def extract_hvp_content(manifest):
             pos = hs.get("position", {})
             tab["hotspots"].append({
                 "header": header,
-                "text": text,
+                "text": html_mod.unescape(text) if "&lt;" in text else text,
                 "position": pos,
             })
 
@@ -436,13 +513,38 @@ def extract_hvp_content(manifest):
 
         # Extract the H5P main image if present
         if main_image_path:
-            img_fn = os.path.basename(main_image_path)
+            img_fn = os.path.basename(main_image_path.split("#")[0])
             # H5P images are in 'content' filearea
             ch = manifest.get("content", {}).get(img_fn)
             if ch:
                 extract_image_by_hash(ch, img_fn)
 
     return tabs
+
+
+def fix_bare_links(html_text, corpus):
+    def sub(m):
+        text = m.group(1)
+        key = html_mod.unescape(re.sub(r"<[^>]+>", "", text))[:25]
+        for hm in re.finditer(r'<a\s[^>]*href="(http[^"]+)"[^>]*>([^<]*)</a>', corpus):
+            if html_mod.unescape(hm.group(2)).strip().startswith(key.strip()):
+                return f'<a href="{hm.group(1)}" target="_blank" rel="noopener">{text}</a>'
+        return text  # unresolved: plain text, not a dead link
+    return re.sub(r"<a>([^<]*)</a>", sub, html_text)
+
+
+def build_hotspot_html(tab):
+    """Image-hotspot figure replacing the Moodle H5P iframe."""
+    out = [f'<figure class="hotspot-figure"><img src="data/images/{os.path.basename(tab["image"])}" alt="{html_mod.escape(tab["title"])}">']
+    for i, hs in enumerate(tab["hotspots"], 1):
+        p = hs["position"]
+        out.append(
+            f'<div class="hotspot" style="left:{p["x"]:.2f}%;top:{p["y"]:.2f}%">'
+            f'<button type="button" class="hotspot-dot" aria-expanded="false" aria-label="{html_mod.escape(hs["header"])}">+</button>'
+            f'<div class="hotspot-popup" hidden><button type="button" class="hotspot-close" aria-label="Close">&times;</button>'
+            f'<h4>{hs["header"]}</h4>{hs["text"]}</div></div>')
+    out.append('</figure>')
+    return "".join(out)
 
 
 # ── Extract page resources ────────────────────────────────────────────
@@ -466,8 +568,8 @@ def extract_pages():
         content_m = re.search(r'<content>(.*?)</content>', content, re.DOTALL)
         raw = content_m.group(1) if content_m else ""
 
-        en_content = clean_html(extract_lang(raw, "en"))
-        fr_content = clean_html(extract_lang(raw, "fr"))
+        en_content = fix_file_links(clean_html(extract_lang(raw, "en")), "en")
+        fr_content = fix_file_links(clean_html(extract_lang(raw, "fr")), "fr")
         en_title = extract_lang(title_raw, "en")
         fr_title = extract_lang(title_raw, "fr")
 
@@ -486,10 +588,19 @@ def main():
 
     print("Building file manifest...")
     manifest = build_file_manifest()
+    MANIFEST.update(manifest)
     print(f"  Found {sum(len(v) for v in manifest.values())} files across {len(manifest)} areas")
 
+    print("Extracting H5P interactive content...")
+    hvp_tabs = extract_hvp_content(manifest)
+    print(f"  {len(hvp_tabs)} H5P activities")
+    for t in hvp_tabs:
+        print(f"    - {t['title']}: {len(t['hotspots'])} hotspots")
+
+    hvp_by_id = {t["id"]: t for t in hvp_tabs}
+
     print("Extracting lessons...")
-    lessons = extract_lessons(manifest)
+    lessons = extract_lessons(manifest, hvp_by_id)
     for lid, ldata in lessons.items():
         en_pages = len(ldata["en"]["pages"])
         print(f"  {lid}: EN={en_pages} pages - {ldata['en']['title'][:60]}")
@@ -497,12 +608,6 @@ def main():
     print("Extracting quiz questions...")
     questions = extract_quiz_questions()
     print(f"  {len(questions)} questions")
-
-    print("Extracting H5P interactive content...")
-    hvp_tabs = extract_hvp_content(manifest)
-    print(f"  {len(hvp_tabs)} H5P activities")
-    for t in hvp_tabs:
-        print(f"    - {t['title']}: {len(t['hotspots'])} hotspots")
 
     print("Extracting pages...")
     pages = extract_pages()
@@ -513,6 +618,7 @@ def main():
 
     print("\nMerging with existing course JSON...")
 
+    all_corpus = "".join(p["content"] for L in lessons.values() for lg in ("en", "fr") for p in L[lg]["pages"])
     for lang in ["en", "fr"]:
         with open(f"data/course-{lang}.json") as f:
             course = json.load(f)
@@ -539,88 +645,27 @@ def main():
             ldata = lessons[moodle_id][lang]
 
             if idx is None:
-                # Pre-course content (lesson_10372 = Learning Objectives)
-                # courseOverview is a list of {text, images} items
-                if ldata["pages"]:
-                    for p in ldata["pages"]:
-                        if p.get("content"):
-                            course["courseOverview"].append({
-                                "text": p["content"],
-                                "images": []
-                            })
+                # Pre-course lesson (Moodle course structure/accreditation) is not shown on the static site
+                pass
             else:
                 # Merge into existing lessons
                 if idx < len(course["lessons"]):
                     existing_lesson = course["lessons"][idx]
                     existing_lesson["pages"] = [
-                        {"title": p["title"], "content": p["content"]}
+                        {"id": p["id"], "title": p["title"], "content": p["content"]}
                         for p in ldata["pages"]
                     ]
+                    # lessons 2-4 (idx 1-3) carry the learning-check questions
+                    if ldata["questions"] and 0 <= idx - 1 < len(course["learningChecks"]):
+                        course["learningChecks"][idx - 1]["questions"] = ldata["questions"]
 
-        # Add H5P interactive content as tabs on lessons 2, 3, 4
-        # The H5P content is about the iCanWork plan (assessment, addressing challenges, transitioning)
-        # Lesson 2 = assessment, Lesson 3 = addressing challenges, Lesson 4 = transitioning
-        if hvp_tabs:
-            # Determine which language's H5P to use
-            if lang == "en":
-                en_hvp = [t for t in hvp_tabs if "Cancer and Return" in t["title"] or "Activit" not in t["title"]]
-            else:
-                fr_hvp = [t for t in hvp_tabs if "plan de retour" in t["title"].lower() or "Activit" in t["title"]]
-                en_hvp = [t for t in hvp_tabs if "Activit" not in t["title"]]
+        # Pre-course quiz from the Moodle question bank
+        course["preQuiz"]["questions"] = [build_quiz_question(q, lang) for q in questions]
 
-            # Map H5P hotspots to tab content for relevant lessons
-            # H5P EN is "Interactive: Cancer and Return to Work Plan"
-            # H5P FR is "Activité interactive : Le cancer et le plan de retour au travail"
-            for t in hvp_tabs:
-                if lang == "fr" and "Activit" not in t["title"]:
-                    continue
-                if lang == "en" and "Activit" in t["title"]:
-                    continue
-
-                # Determine which lesson this H5P maps to based on hotspot content
-                # The hotspots reference iCanWork steps: assessment, addressing challenges, transitioning, communication
-                # Map to lessons 2-4 based on hotspot headers
-                for i, hs in enumerate(t.get("hotspots", [])):
-                    header = hs.get("header", "").lower()
-                    text = hs.get("text", "").lower()
-
-                    # Determine target lesson from content keywords
-                    target_lesson = None
-                    if "assessment" in header or "evaluation" in header:
-                        target_lesson = 1  # Lesson 2
-                    elif "challenge" in header or "défi" in header:
-                        target_lesson = 2  # Lesson 3
-                    elif "transition" in header:
-                        target_lesson = 3  # Lesson 4
-                    elif "communication" in header:
-                        target_lesson = 2  # Lesson 3 (addressing challenges includes communication)
-                    elif "start and end" in header or "date" in header:
-                        target_lesson = 3  # Lesson 4 (transitioning)
-                    elif "accommodation" in header or "amén" in header:
-                        target_lesson = 2  # Lesson 3
-                    elif "disclosure" in header or "divulg" in header:
-                        target_lesson = 3  # Lesson 4
-                    elif "transport" in header:
-                        target_lesson = 3  # Lesson 4
-                    elif "former job" in header or "ancien" in header:
-                        target_lesson = 3  # Lesson 4
-                    elif "seek change" in header or "recherche" in header:
-                        target_lesson = 3  # Lesson 4
-
-                    if target_lesson is not None and target_lesson < len(course["lessons"]):
-                        if "tabs" not in course["lessons"][target_lesson]:
-                            course["lessons"][target_lesson]["tabs"] = []
-
-                        # Add as tab if not already present
-                        tab_exists = any(
-                            tt.get("title", "") == hs["header"]
-                            for tt in course["lessons"][target_lesson]["tabs"]
-                        )
-                        if not tab_exists:
-                            course["lessons"][target_lesson]["tabs"].append({
-                                "title": hs["header"],
-                                "content": [{"text": hs["text"]}],
-                            })
+        # Moodle URL-activity links lost their target in the export (href = the Moodle root);
+        # recover them from identical link text elsewhere in the course, else drop the dead link.
+        if "page_10512" in pages:
+            pages["page_10512"][lang]["content"] = fix_bare_links(pages["page_10512"][lang]["content"], all_corpus)
 
         # Add resources page content
         if "page_10512" in pages:
@@ -633,6 +678,8 @@ def main():
         # Add course summary page content
         if "page_10511" in pages:
             sum_page = pages["page_10511"][lang]
+            # drop the Moodle "Finish course" call-to-action (no post-course gate on the static site)
+            sum_page = dict(sum_page, content=re.split(r'<p style="text-align: center; margin-top: 50px;">', sum_page["content"])[0].strip())
             if "courseSummary" in course and isinstance(course["courseSummary"], list):
                 course["courseSummaryPages"] = {
                     "title": sum_page["title"],

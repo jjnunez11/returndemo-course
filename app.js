@@ -34,6 +34,11 @@
       courseSummary: "Course Summary",
       postCourse: "Post-Course Questionnaire",
       checkAnswer: "Check Answer",
+      question: "Question",
+      select: "Select…",
+      answerAll: "Please answer every line first.",
+      answerFirst: "Please select an answer first.",
+      preQuizIntro: "This pre-course quiz is designed solely for self-assessment purposes. It will help gauge your knowledge about supporting the return to work process of cancer survivors.",
       correct: "Correct!",
       incorrect: "Incorrect",
       correctAnswer: "Correct answer:",
@@ -63,6 +68,11 @@
       courseSummary: "Résumé du cours",
       postCourse: "Questionnaire suite au cours",
       checkAnswer: "Vérifier la réponse",
+      question: "Question",
+      select: "Choisir…",
+      answerAll: "Veuillez répondre à chaque ligne d'abord.",
+      answerFirst: "Veuillez d'abord sélectionner une réponse.",
+      preQuizIntro: "Ce quiz préalable au cours est conçu uniquement à des fins d'auto-évaluation. Il vous aidera à évaluer vos connaissances sur le soutien au processus de retour au travail des survivants du cancer.",
       correct: "Correct!",
       incorrect: "Incorrect",
       correctAnswer: "Bonne réponse:",
@@ -239,6 +249,7 @@
     html += renderNavButtons(id);
 
     wrapper.innerHTML = html;
+    initWidgets();
     wrapper.scrollTop = 0;
     window.scrollTo(0, 0);
 
@@ -332,13 +343,14 @@
           html += `<h3 class="section-title mbz-page-title">${page.title}</h3>`;
         }
         if (page.content) {
-          html += `<div class="mbz-page-content">${fixEmbeds(page.content)}</div>`;
+          html += `<div class="mbz-page-content" id="lp-${page.id}">${fixEmbeds(page.content)}</div>`;
         }
       }
     }
 
-    // Render docx-extracted sections (supplementary)
-    for (const section of lesson.sections) {
+    // Render docx-extracted sections only when the Moodle pages are missing
+    const docxSections = lesson.pages && lesson.pages.length ? [] : lesson.sections;
+    for (const section of docxSections) {
       html += `<h3 class="section-subtitle">${section.title}</h3>`;
 
       // Section images
@@ -426,12 +438,9 @@
     const t = i18n[state.lang];
     let html = `<div class="section">`;
 
-    if (quiz.title) {
-      html += `<h2 class="section-title">${quiz.title}</h2>`;
-    }
-    if (quiz.intro) {
-      html += `<p class="quiz-intro">${quiz.intro}</p>`;
-    }
+    const navLabel = getNavItems().find((n) => n.id === id);
+    html += `<h2 class="section-title">${navLabel ? navLabel.label : ""}</h2>`;
+    if (id === "pre-quiz") html += `<p class="quiz-intro">${t.preQuizIntro}</p>`;
 
     // Case study
     if (quiz.caseStudy && quiz.caseStudy.length) {
@@ -448,114 +457,99 @@
 
     // Questions
     const questions = quiz.questions || [];
-    for (let q = 0; q < questions.length; q++) {
-      const qData = questions[q];
+    questions.forEach((qData, q) => {
       html += `<div class="quiz-question" data-quiz="${q}">`;
-      html += `<p class="question-text">Question ${q + 1}: ${qData.question}</p>`;
-
-      const isMultiSelect = qData.question.toLowerCase().includes("select all");
+      html += `<div class="question-text"><strong>${t.question} ${q + 1}/${questions.length}</strong>${qData.prompt}</div>`;
       html += `<div class="quiz-options">`;
-      qData.options.forEach((opt, oi) => {
-        const inputType = isMultiSelect ? "checkbox" : "radio";
-        const inputId = `${id}-q${q}-o${oi}`;
-        html += `
-          <div class="quiz-option" data-option="${oi}">
-            <input type="${inputType}" name="${id}-q${q}" id="${inputId}" value="${oi}">
-            <label for="${inputId}">${opt}</label>
-          </div>`;
-      });
+      if (qData.type === "matching") {
+        const choices = qData.choices.map((c) => `<option value="${c}">${c}</option>`).join("");
+        qData.items.forEach((item, oi) => {
+          html += `
+            <div class="quiz-option matching-item" data-option="${oi}">
+              <label for="${id}-q${q}-o${oi}">${item.label}</label>
+              <select id="${id}-q${q}-o${oi}"><option value="">${t.select}</option>${choices}</select>
+            </div>`;
+        });
+      } else {
+        const inputType = qData.type === "multi" ? "checkbox" : "radio";
+        qData.options.forEach((opt, oi) => {
+          const inputId = `${id}-q${q}-o${oi}`;
+          html += `
+            <div class="quiz-option" data-option="${oi}">
+              <input type="${inputType}" name="${id}-q${q}" id="${inputId}" value="${oi}">
+              <label for="${inputId}">${opt}</label>
+            </div>`;
+        });
+      }
       html += `</div>`;
-
       html += `<button class="check-answer-btn" onclick="window.__course.checkAnswer('${id}', ${q})">${t.checkAnswer}</button>`;
-      html += `<div class="feedback" id="${id}-feedback-${q}"></div>`;
+      html += `<div class="feedback" id="${id}-feedback-${q}" role="status"></div>`;
       html += `</div>`;
-    }
+    });
 
     html += `</div>`;
     return html;
   }
 
   // ── Quiz Logic ──────────────────────────────────────────────────────
-  function checkAnswer(quizId, qIdx) {
+  function getQuiz(quizId) {
     const data = getData();
-    let quiz;
-
-    if (quizId === "pre-quiz") quiz = data.preQuiz;
-    else quiz = data.learningChecks.find((lc) => lc.title && lc.title.includes(quizId.replace("learning-check-", "Learning Check #").replace("learning-check-", "Vérification #")));
-
-    // Fallback: find by index
-    if (!quiz && quizId.startsWith("learning-check-")) {
-      const num = parseInt(quizId.split("-")[2]) - 1;
-      quiz = data.learningChecks[num];
-    }
-
-    if (!quiz || !quiz.questions || !quiz.questions[qIdx]) return;
-
-    const qData = quiz.questions[qIdx];
-    const isMultiSelect = qData.question.toLowerCase().includes("select all");
-    const name = `${quizId}-q${qIdx}`;
-
-    let selected;
-    if (isMultiSelect) {
-      selected = Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map(
-        (i) => parseInt(i.value)
-      );
-    } else {
-      const checked = document.querySelector(`input[name="${name}"]:checked`);
-      selected = checked ? [parseInt(checked.value)] : [];
-    }
-
-    // Determine correct answers by matching
-    const correctText = qData.correct.toLowerCase();
-    const options = qData.options;
-
-    // Mark correct/incorrect
-    const optionEls = document.querySelectorAll(`[data-quiz="${qIdx}"] .quiz-option`);
-    optionEls.forEach((el, oi) => {
-      el.classList.remove("correct", "incorrect");
-      if (selected.includes(oi)) {
-        // Check if this option is in the correct answer
-        const optText = options[oi].toLowerCase();
-        const isCorrect = isOptionCorrect(optText, correctText);
-        if (isCorrect) {
-          el.classList.add("correct");
-        } else {
-          el.classList.add("incorrect");
-        }
-      }
-    });
-
-    // Show feedback
-    const feedbackEl = document.getElementById(`${quizId}-feedback-${qIdx}`);
-    const allCorrect = selected.length > 0 && selected.every((si) => {
-      const optText = options[si].toLowerCase();
-      return isOptionCorrect(optText, correctText);
-    });
-
-    if (allCorrect) {
-      feedbackEl.className = "feedback correct";
-      feedbackEl.innerHTML = `<strong>${i18n[state.lang].correct}</strong>`;
-      if (qData.explanation) {
-        feedbackEl.innerHTML += `<p style="margin-top:8px;">${qData.explanation}</p>`;
-      }
-    } else {
-      feedbackEl.className = "feedback incorrect";
-      feedbackEl.innerHTML = `<strong>${i18n[state.lang].incorrect}</strong>
-        <div class="correct-answer">${i18n[state.lang].correctAnswer} ${qData.correct}</div>`;
-      if (qData.explanation) {
-        feedbackEl.innerHTML += `<p style="margin-top:8px;">${qData.explanation}</p>`;
-      }
-    }
+    if (quizId === "pre-quiz") return data.preQuiz;
+    return data.learningChecks[parseInt(quizId.split("-")[2]) - 1];
   }
 
-  function isOptionCorrect(optText, correctText) {
-    // Simple fuzzy matching: check if key words from the option appear in the correct answer
-    const words = optText.split(/\s+/).filter((w) => w.length > 3);
-    let matchCount = 0;
-    for (const word of words) {
-      if (correctText.includes(word)) matchCount++;
+  function checkAnswer(quizId, qIdx) {
+    const quiz = getQuiz(quizId);
+    if (!quiz || !quiz.questions || !quiz.questions[qIdx]) return;
+    const qData = quiz.questions[qIdx];
+    const t = i18n[state.lang];
+    const root = document.querySelector(`#content-wrapper [data-quiz="${qIdx}"]`);
+    const optionEls = root.querySelectorAll(".quiz-option");
+    const name = `${quizId}-q${qIdx}`;
+    let isCorrect, feedbackHtml = "";
+
+    optionEls.forEach((el) => el.classList.remove("correct", "incorrect"));
+
+    if (qData.type === "matching") {
+      const picks = qData.items.map((_, oi) => document.getElementById(`${name}-o${oi}`).value);
+      if (picks.some((p) => !p)) {
+        showFeedback(quizId, qIdx, "incorrect", `<strong>${t.answerAll}</strong>`);
+        return;
+      }
+      isCorrect = true;
+      qData.items.forEach((item, oi) => {
+        const ok = picks[oi] === item.answer;
+        isCorrect = isCorrect && ok;
+        optionEls[oi].classList.add(ok ? "correct" : "incorrect");
+      });
+      feedbackHtml = isCorrect ? qData.feedbackCorrect : qData.feedbackIncorrect;
+    } else {
+      const selected = Array.from(root.querySelectorAll("input:checked")).map((i) => parseInt(i.value));
+      if (!selected.length) {
+        showFeedback(quizId, qIdx, "incorrect", `<strong>${t.answerFirst}</strong>`);
+        return;
+      }
+      const correct = qData.correct;
+      isCorrect = selected.length === correct.length && selected.every((i) => correct.includes(i));
+      optionEls.forEach((el, oi) => {
+        if (selected.includes(oi)) el.classList.add(correct.includes(oi) ? "correct" : "incorrect");
+        else if (!isCorrect && qData.type === "multi" && correct.includes(oi)) el.classList.add("correct");
+      });
+      if (qData.type === "single") feedbackHtml = (qData.feedback || [])[selected[0]] || "";
+      if (!isCorrect && qData.type === "multi") {
+        feedbackHtml = `<p>${t.correctAnswer} ${correct.map((i) => qData.options[i].replace(/<\/?p>/g, "")).join("; ")}</p>`;
+      }
     }
-    return matchCount >= Math.max(1, Math.ceil(words.length * 0.4));
+
+    // Moodle feedback already carries its own ✔ / ✖ lead-in; otherwise add ours.
+    const lead = /✔|✖/.test(feedbackHtml) ? "" : `<strong>${isCorrect ? t.correct : t.incorrect}</strong>`;
+    showFeedback(quizId, qIdx, isCorrect ? "correct" : "incorrect", lead + feedbackHtml);
+  }
+
+  function showFeedback(quizId, qIdx, kind, html) {
+    const el = document.getElementById(`${quizId}-feedback-${qIdx}`);
+    el.className = `feedback ${kind}`;
+    el.innerHTML = html;
   }
 
   // ── Course Summary ──────────────────────────────────────────────────
@@ -570,7 +564,9 @@
     }
 
     // Fallback: render existing courseSummary items
-    if (Array.isArray(data.courseSummary)) {
+    if (data.courseSummaryPages && data.courseSummaryPages.content) {
+      // already rendered above
+    } else if (Array.isArray(data.courseSummary)) {
       for (const item of data.courseSummary) {
         html += `<p class="content-text">${item}</p>`;
       }
@@ -613,12 +609,22 @@
       html += `<div class="questionnaire-item">`;
       html += `<label>${q.number}. ${q.text}</label>`;
 
-      if (q.options && q.options.length) {
+      const scale = (q.options || []).filter((o) => /^\d\s*=/.test(o));
+      const stmts = (q.options || []).filter((o) => /^[a-z]\)\s/.test(o));
+      if (scale.length && stmts.length) {
+        html += `<div class="likert-wrap"><table class="likert"><thead><tr><th></th>${scale.map((s) => `<th>${s}</th>`).join("")}</tr></thead><tbody>`;
+        stmts.forEach((st, si) => {
+          html += `<tr><th scope="row">${st.replace(/^[a-z]\)\s*/, "")}</th>${scale
+            .map((s, ci) => `<td><input type="radio" name="qc-${qi}-${si}" value="${ci}" aria-label="${s}"></td>`)
+            .join("")}</tr>`;
+        });
+        html += `</tbody></table></div>`;
+      } else if (q.options && q.options.length > 1) {
         html += `<div class="questionnaire-options">`;
         q.options.forEach((opt, oi) => {
           html += `
             <div class="questionnaire-option">
-              <input type="radio" name="qc-${qi}" id="qc-${qi}-${oi}" value="${oi}">
+              <input type="${q.multi ? "checkbox" : "radio"}" name="qc-${qi}" id="qc-${qi}-${oi}" value="${oi}">
               <label for="qc-${qi}-${oi}">${opt}</label>
             </div>`;
         });
@@ -764,6 +770,121 @@
       const newLang = state.lang === "en" ? "fr" : "en";
       switchLang(newLang);
     });
+  });
+
+  // ── Moodle/Bootstrap widget behaviour (tabs, accordions, flip cards, timeline, popups) ──
+  function initWidgets() {
+    const wrap = document.getElementById("content-wrapper");
+    wrap.querySelectorAll(".timeline-box").forEach((b) => b.classList.remove("show"));
+    const first = wrap.querySelector("#timeline1");
+    if (first) first.classList.add("show");
+  }
+
+  document.addEventListener("click", (e) => {
+    const wrap = document.getElementById("content-wrapper");
+    if (!wrap || !wrap.contains(e.target)) return;
+
+    // show/hide text blocks ("Text description ▼", "show/hide references ▼")
+    const tg = e.target.closest("[data-toggle-target]");
+    if (tg) {
+      const el = wrap.querySelector(tg.dataset.toggleTarget);
+      if (el) el.classList.toggle("show");
+      return;
+    }
+    // Bootstrap tabs
+    const tab = e.target.closest('a[data-toggle="tab"]');
+    if (tab) {
+      e.preventDefault();
+      const box = tab.closest(".course-tabs") || tab.closest("div");
+      box.querySelectorAll(".nav-link").forEach((a) => a.classList.remove("active"));
+      box.querySelectorAll(".tab-pane").forEach((p) => p.classList.remove("active", "show"));
+      tab.classList.add("active");
+      const pane = box.querySelector(tab.getAttribute("href"));
+      if (pane) pane.classList.add("active", "show");
+      return;
+    }
+    // Bootstrap accordion / collapse
+    const col = e.target.closest('[data-toggle="collapse"]');
+    if (col) {
+      const target = wrap.querySelector(col.dataset.target);
+      if (!target) return;
+      const open = !target.classList.contains("show");
+      if (col.dataset.parent === undefined && target.dataset.parent) {
+        wrap.querySelectorAll(`${target.dataset.parent} .collapse.show`).forEach((o) => {
+          if (o !== target) {
+            o.classList.remove("show");
+            const h = wrap.querySelector(`[data-target="#${o.id}"]`);
+            if (h) { h.classList.add("collapsed"); const b = h.querySelector("button"); if (b) b.setAttribute("aria-expanded", "false"); }
+          }
+        });
+      }
+      target.classList.toggle("show", open);
+      col.classList.toggle("collapsed", !open);
+      const b = col.querySelector("button");
+      if (b) b.setAttribute("aria-expanded", String(open));
+      return;
+    }
+    // timeline buttons
+    const tp = e.target.closest(".timeline-point-img-wrapper");
+    if (tp) {
+      const all = Array.from(tp.parentElement.children);
+      const idx = all.indexOf(tp);
+      const wasActive = tp.classList.contains("active");
+      all.forEach((w) => {
+        w.classList.remove("active");
+        const im = w.querySelector("img");
+        if (im) im.classList.add("btn-inactive-shadow");
+      });
+      wrap.querySelectorAll(".timeline-box").forEach((b) => b.classList.remove("show"));
+      if (!wasActive) {
+        tp.classList.add("active");
+        const im = tp.querySelector("img");
+        if (im) im.classList.remove("btn-inactive-shadow");
+        const box = wrap.querySelector(`#timeline${idx + 1}`);
+        if (box) box.classList.add("show");
+      }
+      return;
+    }
+    // flip cards
+    const card = e.target.closest(".term_card7, .term_card4");
+    if (card) { card.classList.toggle("flipped"); return; }
+    // inline definition tooltips (touch-friendly: click toggles)
+    const def = e.target.closest(".inline_definition2");
+    if (def) { def.classList.toggle("open"); return; }
+    // inline definition popups
+    const pop = e.target.closest(".popup");
+    if (pop) {
+      const t = pop.querySelector(".popuptext");
+      if (t) t.classList.toggle("hidden");
+      return;
+    }
+    // links to other lesson pages
+    const go = e.target.closest("[data-goto]");
+    if (go) {
+      e.preventDefault();
+      renderSection(go.dataset.goto);
+      const dest = document.getElementById(`lp-${go.dataset.page}`);
+      if (dest) dest.scrollIntoView({ behavior: "smooth" });
+    }
+  });
+
+  // H5P-style image hotspots (lesson 4 plan form)
+  document.addEventListener("click", (e) => {
+    const dot = e.target.closest(".hotspot-dot");
+    const close = e.target.closest(".hotspot-close");
+    const open = document.querySelector(".hotspot.open");
+    if (open && (close || dot || !e.target.closest(".hotspot-popup"))) {
+      open.classList.remove("open");
+      open.querySelector(".hotspot-popup").hidden = true;
+      open.querySelector(".hotspot-dot").setAttribute("aria-expanded", "false");
+      if (!dot || dot.parentElement === open) return;
+    }
+    if (dot) {
+      const h = dot.parentElement;
+      h.classList.add("open");
+      h.querySelector(".hotspot-popup").hidden = false;
+      dot.setAttribute("aria-expanded", "true");
+    }
   });
 
   // ── Boot ────────────────────────────────────────────────────────────
