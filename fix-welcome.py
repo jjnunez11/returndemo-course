@@ -37,7 +37,7 @@ for l in ("en", "fr"):
     f = f"data/course-{l}.json"
     d = json.load(open(f))
     d["meta"].update(r["meta"]); d["meta"]["objectivesHeading"] = r["objHeading"]
-    d["acknowledgements"] = r["ack"]
+    d["acknowledgements"] = dict(r["ack"], html=d.get("acknowledgements", {}).get("html", ""))
     json.dump(d, open(f, "w"), ensure_ascii=False, indent=2)
     print(l, json.dumps(r, ensure_ascii=False, indent=1)[:1800])
 
@@ -74,3 +74,13 @@ for l in ("en", "fr"):
         q["number"] = str(n)
     json.dump(d, open(f, "w"), ensure_ascii=False, indent=2)
     print(l, "questionnaire:", [(q["number"], len(q["options"])) for q in qs])
+
+
+# ── Source bug: the Moodle EN copy of Learning Check #2 / question 2 repeats question 1's prompt ──
+d = json.load(open("data/course-en.json"))
+q = d["learningChecks"][1]["questions"][1]
+if "what services are recommended" in q["prompt"]:
+    q["prompt"] = ('<p><strong>What are the allied health disciplines Sally could be referred to help address her '
+                   'functional problems?</strong> <em>Choose the most correct response.</em></p>')
+    json.dump(d, open("data/course-en.json", "w"), ensure_ascii=False, indent=2)
+    print("en: fixed LC2 Q2 prompt")

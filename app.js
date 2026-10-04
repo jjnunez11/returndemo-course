@@ -33,6 +33,8 @@
       lc3: "Learning Check #3",
       courseSummary: "Course Summary",
       postCourse: "Post-Course Questionnaire",
+      showAcks: "Click here to show/hide acknowledgements ▼",
+      hideAcks: "Click here to show/hide acknowledgements ▲",
       checkAnswer: "Check Answer",
       question: "Question",
       select: "Select…",
@@ -67,6 +69,8 @@
       lc3: "Vérification d'apprentissage #3",
       courseSummary: "Résumé du cours",
       postCourse: "Questionnaire suite au cours",
+      showAcks: "Cliquez ici pour afficher/masquer les remerciements ▼",
+      hideAcks: "Cliquez ici pour afficher/masquer les remerciements ▲",
       checkAnswer: "Vérifier la réponse",
       question: "Question",
       select: "Choisir…",
@@ -288,18 +292,15 @@
         <button class="collapsible-toggle" onclick="this.nextElementSibling.classList.toggle('open'); this.textContent = this.nextElementSibling.classList.contains('open') ? (window.__course.t('hideAcks') || 'Hide acknowledgements ▲') : (window.__course.t('showAcks') || 'Show acknowledgements ▼');">
           ${state.lang === "en" ? "Click here to show/hide acknowledgements ▼" : "Cliquez ici pour afficher/masquer les remerciements ▼"}
         </button>
-        <div class="collapsible-content">
-          ${[["lead", "leadAuthors"], ["design", "design"], ["thanks", "specialThanks"]]
-            .filter(([, k]) => acks[k].length)
-            .map(([h, k]) => `<h4>${acks.headings[h]}</h4><ul>${acks[k].map((a) => `<li>${a}</li>`).join("")}</ul>`)
-            .join("")}
-          ${acks.acknowledgement ? `<h4>${acks.headings.ack}</h4><p style="font-size:0.9rem;">${acks.acknowledgement}</p>` : ""}
+        <div class="collapsible-content acks-content">
+          ${acks.html
+            ? acks.html
+            : [["lead", "leadAuthors"], ["design", "design"], ["thanks", "specialThanks"]]
+                .filter(([, k]) => acks[k].length)
+                .map(([h, k]) => `<h4>${acks.headings[h]}</h4><ul>${acks[k].map((a) => `<li>${a}</li>`).join("")}</ul>`)
+                .join("") + (acks.acknowledgement ? `<h4>${acks.headings.ack}</h4><p style="font-size:0.9rem;">${acks.acknowledgement}</p>` : "")}
         </div>
       </div>
-      ${acks.disclosures ? `<div class="collapsible">
-        <button class="collapsible-toggle" onclick="this.nextElementSibling.classList.toggle('open')">${state.lang === "en" ? "Click here to show/hide all disclosures ▼" : "Cliquez ici pour afficher/masquer toutes les divulgations ▼"}</button>
-        <div class="collapsible-content"><p style="font-size:0.9rem;">${acks.disclosures}</p></div>
-      </div>` : ""}
     `;
   }
 
@@ -884,6 +885,20 @@
       h.classList.add("open");
       h.querySelector(".hotspot-popup").hidden = false;
       dot.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  // mobile slide-out navigation
+  document.addEventListener("click", (e) => {
+    const sb = document.getElementById("sidebar");
+    const btn = document.getElementById("mobile-menu-btn");
+    if (!sb || !btn) return;
+    if (e.target.closest("#mobile-menu-btn")) {
+      const open = sb.classList.toggle("open");
+      btn.setAttribute("aria-expanded", String(open));
+    } else if (sb.classList.contains("open") && (e.target.closest("#nav-list a") || !e.target.closest("#sidebar"))) {
+      sb.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
     }
   });
 

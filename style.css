@@ -1108,7 +1108,9 @@ a:hover {
 .term_card7.flipped .back, .term_card4.flipped .back { transform: rotateY(0deg); }
 .dkpurple { background: var(--accent-dark); color: #fff; }
 .ltpurple { background: var(--accent-surface); color: var(--text); }
-.term_card7 .front img { display: none; }
+.term_card7 .front #wrapper2, .term_card7 .front [id^=wrapper] { position: absolute; inset: 0; max-width: none !important; }
+.term_card7 .front [id^=image] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.term_card7 .front [id^=image] img { width: 100%; max-width: none !important; height: 100%; object-fit: contain; object-position: top left; }
 .flipcard-quote { margin: 0; font-style: italic; border: 0; }
 .back_container { padding: 12px 18px 16px; font-size: .88rem; line-height: 1.45; }
 .back_container p { margin: .5em 0; }
@@ -1132,3 +1134,20 @@ a:hover {
 .inline_definition2 > span { display: none; position: absolute; left: 0; top: 100%; z-index: 20; width: max-content; max-width: min(320px, 80vw); margin-top: 6px; padding: 10px 14px;
   background: var(--bg-white); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.18); font-size: .88rem; font-weight: 400; color: var(--text); line-height: 1.45; }
 .inline_definition2:hover > span, .inline_definition2.open > span { display: block; }
+
+/* Identify / Treat / Refer columns: let them share the row instead of stacking at 400px */
+.mbz-page-content div[style*="max-width: 400px"] { flex: 1 1 240px; max-width: none !important; box-sizing: border-box; }
+
+/* responsive media inside Moodle content (inline max-width styles would otherwise overflow phones) */
+.mbz-page-content img { max-width: 100% !important; height: auto; }
+.mbz-page-content iframe { max-width: 100%; }
+@media (max-width: 768px) { .mbz-page-content table { display: block; overflow-x: auto; } }
+
+.acks-content h5 { color: var(--accent-dark); margin: 1.2em 0 .4em; }
+.acks-content table { width: 100%; border-collapse: collapse; font-size: .88rem; margin: 8px 0; }
+.acks-content td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.acks-content thead td { background: var(--accent-surface); color: var(--accent-dark); }
+.acks-content img { height: auto; margin: 6px 14px 6px 0; vertical-align: middle; }
+.collapsible-content.acks-content .collapse_container { display: none; }
+.collapsible-content.acks-content .collapse_container.show { display: block; }
+.acks-content img { display: inline-block; }

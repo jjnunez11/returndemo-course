@@ -234,8 +234,9 @@ def clean_html(raw_html):
     # Strip trailing opening tags that are artifacts
     raw_html = re.sub(r'(<p>\s*$|<div>\s*$)', '', raw_html)
 
-    # Remove empty paragraphs
+    # Remove empty paragraphs and headings
     raw_html = re.sub(r'<p>\s*</p>', '', raw_html)
+    raw_html = re.sub(r'<h([1-6])[^>]*>\s*</h\1>', '', raw_html)
 
     return raw_html.strip()
 
@@ -316,7 +317,9 @@ def build_lesson_question(page_block, lang, img_map):
     contents = clean_html(extract_lang(_tag(page_block, "contents"), lang))
     contents = process_image_refs(contents, img_map)
     # everything after the case-study box is the actual question prompt
-    prompt = contents.rsplit("</div>", 1)[-1].strip()
+    prompt = re.sub(r"<p[^>]*>\s*</p>", "", contents.rsplit("</div>", 1)[-1]).strip()
+    # drop empty headings left over from Moodle markup
+    prompt = re.sub(r"<h[1-6][^>]*>\s*</h[1-6]>", "", prompt)
     answers = []
     for a in re.findall(r'<answer id="\d+">(.*?)</answer>', page_block, re.DOTALL):
         answers.append({
@@ -331,6 +334,9 @@ def build_lesson_question(page_block, lang, img_map):
         q["options"] = [a["text"] for a in answers]
         q["correct"] = [i for i, a in enumerate(answers) if a["score"] > 0]
         q["feedback"] = [a["response"] for a in answers]
+        # source typo: a correct answer's feedback carried the wrong-answer cross mark
+        for i in q["correct"]:
+            q["feedback"][i] = q["feedback"][i].replace('<span class="incorrect">✖</span>', '<span class="correct">✔</span>')
     else:  # matching: [correct feedback, incorrect feedback, item, item, ...]
         q["type"] = "matching"
         q["feedbackCorrect"] = answers[0]["text"]
@@ -645,8 +651,11 @@ def main():
             ldata = lessons[moodle_id][lang]
 
             if idx is None:
-                # Pre-course lesson (Moodle course structure/accreditation) is not shown on the static site
-                pass
+                # Pre-course lesson: only the authorship / disclosures / acknowledgements page is shown
+                # (course structure and accreditation pages are Moodle/Mainpro+ specific)
+                for p in ldata["pages"]:
+                    if p["id"] == "19153":
+                        course.setdefault("acknowledgements", {})["html"] = p["content"]
             else:
                 # Merge into existing lessons
                 if idx < len(course["lessons"]):
