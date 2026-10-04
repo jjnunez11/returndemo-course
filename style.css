@@ -934,3 +934,90 @@ a:hover {
         gap: 10px;
     }
 }
+
+/* ── MBZ (Moodle) lesson content ────────────────────────────────────── */
+
+.mbz-page-content {
+    margin: 16px 0 24px;
+    line-height: 1.7;
+    color: var(--text-muted);
+}
+
+.mbz-page-content p {
+    margin: 0.8em 0;
+}
+
+.mbz-page-content h4, .mbz-page-content h5 {
+    color: var(--text);
+    margin: 1em 0 0.5em;
+}
+
+.mbz-page-content ul, .mbz-page-content ol {
+    padding-left: 1.5em;
+    margin: 0.8em 0;
+}
+
+.mbz-page-content li {
+    margin: 0.4em 0;
+}
+
+.mbz-page-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 12px 0;
+}
+
+.mbz-page-content a {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.mbz-page-content sup {
+    font-size: 0.75em;
+    color: var(--accent);
+}
+
+.mbz-page-content .lesson-float-right {
+    float: right;
+    margin: 8px 0 8px 16px;
+    max-width: 30%;
+}
+
+.mbz-page-content .lesson-float-right img {
+    max-width: 100%;
+}
+
+.mbz-page-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+}
+
+.mbz-page-content table th,
+.mbz-page-content table td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.mbz-page-content table th {
+    background: var(--surface);
+    font-weight: 600;
+}
+
+.mbz-page-title {
+    margin-top: 32px;
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+}
+
+/* Kaltura video iframes from mbz content */
+.mbz-page-content iframe[id*="kaltura"] {
+    max-width: 100%;
+    border-radius: 8px;
+}
+
+.mbz-page-content div[style*="padding-bottom"] {
+    margin: 16px 0;
+}

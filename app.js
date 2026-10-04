@@ -217,6 +217,9 @@
       case "summary":
         html = renderSummary(data);
         break;
+      case "resources":
+        html = renderResourcesPage(data);
+        break;
       case "post-course":
         html = renderPostCourse(data);
         break;
@@ -315,7 +318,19 @@
     const title = lesson.title || (lesson.sections[0] && lesson.sections[0].title) || `Lesson ${id}`;
     html += `<h2 class="section-title">${title}</h2>`;
 
-    // Render each section
+    // Render mbz-extracted lesson pages (full Moodle content, primary source)
+    if (lesson.pages && lesson.pages.length) {
+      for (const page of lesson.pages) {
+        if (page.title) {
+          html += `<h3 class="section-title mbz-page-title">${page.title}</h3>`;
+        }
+        if (page.content) {
+          html += `<div class="mbz-page-content">${page.content}</div>`;
+        }
+      }
+    }
+
+    // Render docx-extracted sections (supplementary)
     for (const section of lesson.sections) {
       html += `<h3 class="section-subtitle">${section.title}</h3>`;
 
@@ -542,9 +557,37 @@
     let html = `<div class="section">`;
     html += `<h2 class="section-title">${t.courseSummary}</h2>`;
 
-    for (const item of data.courseSummary) {
-      html += `<p class="content-text">${item}</p>`;
+    // Use mbz-extracted course summary if available
+    if (data.courseSummaryPages && data.courseSummaryPages.content) {
+        html += `<div class="mbz-page-content">${data.courseSummaryPages.content}</div>`;
     }
+
+    // Fallback: render existing courseSummary items
+    if (Array.isArray(data.courseSummary)) {
+      for (const item of data.courseSummary) {
+        html += `<p class="content-text">${item}</p>`;
+      }
+    } else if (typeof data.courseSummary === "object" && data.courseSummary.content) {
+      html += `<div class="mbz-page-content">${data.courseSummary.content}</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
+  // ── Resources Page ──────────────────────────────────────────────────
+  function renderResourcesPage(data) {
+    const lang = state.lang;
+    let html = `<div class="section">`;
+
+    // mbz-extracted resources content
+    if (data.resources && data.resources.content) {
+      html += `<h2 class="section-title">${data.resources.title || (lang === "en" ? "Resources" : "Ressources")}</h2>`;
+      html += `<div class="mbz-page-content">${data.resources.content}</div>`;
+    }
+
+    // PDF download links
+    html += renderPDFLinks();
 
     html += `</div>`;
     return html;
