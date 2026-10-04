@@ -218,7 +218,8 @@ def resolve_image_ref(img_ref, img_map):
     filename = m.group(1)
 
     # URL decode common patterns
-    filename = filename.replace("%20", " ").replace("%40", "@")
+    from urllib.parse import unquote
+    filename = unquote(filename)
 
     # Look up in image map
     ch = img_map.get(filename)
@@ -250,7 +251,7 @@ def process_image_refs(html_content, img_map):
             return f'data/images/{resolved}'
         return match.group(0)  # Leave unresolved
 
-    html_content = re.sub(r'@@PLUGINFILE@@/\S+', replace_ref, html_content)
+    html_content = re.sub(r'''@@PLUGINFILE@@/[^"'\s<>)]+''', replace_ref, html_content)
     return html_content
 
 

@@ -21,6 +21,14 @@ python3 build-course.py \
   fr
 ```
 
+Then merge the Moodle backup content and rebuild the welcome-page metadata:
+
+```bash
+mkdir -p /tmp/mbz-extract && tar -xzf sources/RTW-UBC-CPD.mbz -C /tmp/mbz-extract
+python3 extract-mbz.py     # lesson pages, H5P tabs, resources, images
+python3 fix-welcome.py     # meta + acknowledgements from sources/RTW-Course-{EN,FR}.docx
+```
+
 ## Structure
 
 ```

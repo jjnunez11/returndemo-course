@@ -151,6 +151,14 @@
   }
 
   // ── Navigation ──────────────────────────────────────────────────────
+  // Moodle embedded the plan form via an iframe with an empty src; link the PDF instead.
+  function fixEmbeds(html) {
+    const lang = state.lang;
+    const label = lang === "en" ? "Open the Return to Work Plan form (PDF)" : "Ouvrir le formulaire de plan de retour au travail (PDF)";
+    return html.replace(/<iframe[^>]*src=""[^>]*>\s*<\/iframe>/g,
+      `<p><a class="pdf-link" href="assets/pdfs/RTW-plan_${lang}.pdf" target="_blank" rel="noopener">${label}</a></p>`);
+  }
+
   function renderNav() {
     const navList = document.getElementById("nav-list");
     const items = getNavItems();
@@ -256,16 +264,10 @@
       </div>
 
       <div class="section">
-        <h3 class="section-subtitle">${meta.learningObjectives.find(o => o.includes("Objectives") || o.includes("objectives") || o.includes("module") || o.includes("module") || "") || "Learning Objectives"}</h3>
+        <h3 class="section-subtitle">${meta.objectivesHeading}</h3>
+        <p>${meta.objectivesIntro}</p>
         <ul class="objectives-list">
-          ${meta.learningObjectives
-            .filter(
-              (o) =>
-                !o.includes("Learning Objectives") &&
-                !o.includes("By the end")
-            )
-            .map((o) => `<li>${o}</li>`)
-            .join("")}
+          ${meta.learningObjectives.map((o) => `<li>${o}</li>`).join("")}
         </ul>
       </div>
 
@@ -276,12 +278,17 @@
           ${state.lang === "en" ? "Click here to show/hide acknowledgements ▼" : "Cliquez ici pour afficher/masquer les remerciements ▼"}
         </button>
         <div class="collapsible-content">
-          ${acks.leadAuthors.length ? `<h4>${state.lang === "en" ? "Lead Authors" : "Auteures principales"}</h4><ul>${acks.leadAuthors.map((a) => `<li>${a}</li>`).join("")}</ul>` : ""}
-          ${acks.design.length ? `<h4>${state.lang === "en" ? "Instructional Design" : "Conception p\xe9dagogique"}</h4><ul>${acks.design.map((a) => `<li>${a}</li>`).join("")}</ul>` : ""}
-          ${acks.specialThanks.length ? `<h4>${state.lang === "en" ? "Special Thanks" : "Remerciements sp\xe9ciaux"}</h4><ul>${acks.specialThanks.map((a) => `<li>${a}</li>`).join("")}</ul>` : ""}
-          ${acks.acknowledgement ? `<p style="margin-top:12px;font-size:0.9rem;">${acks.acknowledgement}</p>` : ""}
+          ${[["lead", "leadAuthors"], ["design", "design"], ["thanks", "specialThanks"]]
+            .filter(([, k]) => acks[k].length)
+            .map(([h, k]) => `<h4>${acks.headings[h]}</h4><ul>${acks[k].map((a) => `<li>${a}</li>`).join("")}</ul>`)
+            .join("")}
+          ${acks.acknowledgement ? `<h4>${acks.headings.ack}</h4><p style="font-size:0.9rem;">${acks.acknowledgement}</p>` : ""}
         </div>
       </div>
+      ${acks.disclosures ? `<div class="collapsible">
+        <button class="collapsible-toggle" onclick="this.nextElementSibling.classList.toggle('open')">${state.lang === "en" ? "Click here to show/hide all disclosures ▼" : "Cliquez ici pour afficher/masquer toutes les divulgations ▼"}</button>
+        <div class="collapsible-content"><p style="font-size:0.9rem;">${acks.disclosures}</p></div>
+      </div>` : ""}
     `;
   }
 
@@ -325,7 +332,7 @@
           html += `<h3 class="section-title mbz-page-title">${page.title}</h3>`;
         }
         if (page.content) {
-          html += `<div class="mbz-page-content">${page.content}</div>`;
+          html += `<div class="mbz-page-content">${fixEmbeds(page.content)}</div>`;
         }
       }
     }
@@ -685,6 +692,8 @@
   function updateLangToggle() {
     const btn = document.getElementById("lang-toggle");
     const label = document.getElementById("lang-label");
+    const other = document.querySelector(".lang-other");
+    if (other) other.textContent = state.lang === "en" ? "FR" : "EN";
     if (state.lang === "en") {
       label.textContent = "EN";
       btn.setAttribute("aria-label", "Passer en fran\xe7ais");
@@ -692,6 +701,12 @@
       label.textContent = "FR";
       btn.setAttribute("aria-label", "Switch to English");
     }
+
+    document.documentElement.lang = state.lang;
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      const v = i18n[state.lang][el.dataset.i18n];
+      if (v) el.textContent = v;
+    });
 
     // Update site title
     const data = getData();
