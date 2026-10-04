@@ -35,6 +35,8 @@
       postCourse: "Post-Course Questionnaire",
       showAcks: "Click here to show/hide acknowledgements ▼",
       hideAcks: "Click here to show/hide acknowledgements ▲",
+      postCourseIntro: "This is no longer a course, so this questionnaire is now a tool for your own reflection. Your answers are not saved, submitted or shared anywhere.",
+      finish: "Finish",
       checkAnswer: "Check Answer",
       question: "Question",
       select: "Select…",
@@ -71,6 +73,8 @@
       postCourse: "Questionnaire suite au cours",
       showAcks: "Cliquez ici pour afficher/masquer les remerciements ▼",
       hideAcks: "Cliquez ici pour afficher/masquer les remerciements ▲",
+      postCourseIntro: "Ce contenu n'est plus un cours; ce questionnaire est donc maintenant un outil de réflexion personnelle. Vos réponses ne sont ni enregistrées, ni soumises, ni partagées.",
+      finish: "Terminer",
       checkAnswer: "Vérifier la réponse",
       question: "Question",
       select: "Choisir…",
@@ -537,7 +541,7 @@
         else if (!isCorrect && qData.type === "multi" && correct.includes(oi)) el.classList.add("correct");
       });
       if (qData.type === "single") feedbackHtml = (qData.feedback || [])[selected[0]] || "";
-      if (!isCorrect && qData.type === "multi") {
+      if (!isCorrect && !feedbackHtml) {
         feedbackHtml = `<p>${t.correctAnswer} ${correct.map((i) => qData.options[i].replace(/<\/?p>/g, "")).join("; ")}</p>`;
       }
     }
@@ -604,6 +608,7 @@
 
     let html = `<div class="section">`;
     html += `<h2 class="section-title">${t.postCourse}</h2>`;
+    html += `<p class="quiz-intro">${t.postCourseIntro}</p>`;
 
     html += `<div class="questionnaire" id="questionnaire-form">`;
     questions.forEach((q, qi) => {
@@ -637,7 +642,7 @@
       html += `</div>`;
     });
 
-    html += `<button class="submit-btn" onclick="window.__course.submitQuestionnaire()">${state.lang === "en" ? "Submit" : "Soumettre"}</button>`;
+    html += `<button class="submit-btn" onclick="window.__course.submitQuestionnaire()">${t.finish}</button>`;
     html += `</div>`;
 
     html += `<div class="thank-you" id="thank-you">`;

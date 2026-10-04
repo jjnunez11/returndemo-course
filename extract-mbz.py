@@ -157,6 +157,43 @@ def extract_lang(text, lang):
 
 # ── Clean HTML for embedding ──────────────────────────────────────────
 
+# Typos in the source course content (confirmed with JJ, 2026-10-04)
+TYPO_FIXES = [
+    ("bio-pschological", "bio-psychological"),
+    ("inidividual", "individual"),
+    ("tomours", "tumours"),
+    ("Reccurance", "Recurrence"),
+    ("non-pharmiceutical", "non-pharmaceutical"),
+    ("functinal", "functional"),
+    ("central tenant", "central tenet"),
+    ("Azheimer", "Alzheimer"),
+    ("roles outlines by", "roles outlined by"),
+    ("self self-management", "self-management"),
+    ("hhttps://", "https://"),
+    ("[{{type}} Annotation] ", ""),
+]
+
+
+def apply_typo_fixes(html_text):
+    for bad, good in TYPO_FIXES:
+        html_text = html_text.replace(bad, good)
+    return html_text
+
+
+def remove_interactive_fallback(html_text):
+    """Drop the Moodle 'Interactive content not loading? Click here...' toggle + its text copy of the H5P."""
+    m = re.search(r'<p[^>]*collapse_control[^>]*>\s*(?:Interactive content not loading|Le contenu interactif ne se charge pas)[^<]*</p>\s*<div[^>]*collapse_container[^>]*>', html_text)
+    if not m:
+        return html_text
+    depth, pos = 1, m.end()
+    for t in re.finditer(r"<(/?)div\b", html_text[pos:]):
+        depth += -1 if t.group(1) else 1
+        if depth == 0:
+            end = html_text.find(">", pos + t.start()) + 1
+            return html_text[:m.start()] + html_text[end:]
+    return html_text
+
+
 LESSON_SECTION = {"10373": "lesson-1", "10374": "lesson-2", "10375": "lesson-3", "10376": "lesson-4"}
 MANIFEST = {}
 
@@ -207,6 +244,8 @@ def clean_html(raw_html):
     raw_html = re.sub(
         r'href="\$@LESSONVIEWPAGE\*(\d+)\*(\d+)@\$[^"]*"',
         lambda m: f'href="#" data-goto="{LESSON_SECTION.get(m.group(1), "lesson-1")}" data-page="{m.group(2)}"', raw_html)
+
+    raw_html = apply_typo_fixes(remove_interactive_fallback(raw_html))
 
     # Remove Moodle-specific scripts
     raw_html = re.sub(r'<script\b[^>]*>.*?</script>', '', raw_html, flags=re.DOTALL)
@@ -406,7 +445,8 @@ def build_quiz_question(q, lang):
         "prompt": prompt,
         "options": options,
         "correct": correct,
-        "feedback": [clean_html(a["feedback"].get(lang, "")) for a in q["answers"]],
+        # Moodle's per-option feedback here just says "answer revealed later in the course"; omit it
+        "feedback": [],
     }
 
 
@@ -533,9 +573,9 @@ def fix_bare_links(html_text, corpus):
         text = m.group(1)
         key = html_mod.unescape(re.sub(r"<[^>]+>", "", text))[:25]
         for hm in re.finditer(r'<a\s[^>]*href="(http[^"]+)"[^>]*>([^<]*)</a>', corpus):
-            if html_mod.unescape(hm.group(2)).strip().startswith(key.strip()):
+            if key.strip() and key.strip() in html_mod.unescape(hm.group(2)):
                 return f'<a href="{hm.group(1)}" target="_blank" rel="noopener">{text}</a>'
-        return text  # unresolved: plain text, not a dead link
+        return f"{text} &lt;Links missing&gt;"  # unresolved: no dead link, flagged for follow-up
     return re.sub(r"<a>([^<]*)</a>", sub, html_text)
 
 

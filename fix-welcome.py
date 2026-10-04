@@ -84,3 +84,17 @@ if "what services are recommended" in q["prompt"]:
                    'functional problems?</strong> <em>Choose the most correct response.</em></p>')
     json.dump(d, open("data/course-en.json", "w"), ensure_ascii=False, indent=2)
     print("en: fixed LC2 Q2 prompt")
+
+
+# ── Apply the source-typo list to everything in the data files (incl. unused Word-doc copies) ──
+import importlib.util
+_spec = importlib.util.spec_from_file_location("extract_mbz", "extract-mbz.py")
+_em = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_em)
+for l in ("en", "fr"):
+    p = f"data/course-{l}.json"
+    raw = open(p).read()
+    fixed = _em.apply_typo_fixes(raw)
+    if fixed != raw:
+        open(p, "w").write(fixed)
+        print(l, "typo fixes applied to remaining text")
